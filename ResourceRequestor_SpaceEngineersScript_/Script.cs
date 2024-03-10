@@ -71,7 +71,7 @@ namespace Template
 
             // Словарь имя компонента на русском - подтип компонента
             public static Dictionary<string, string> ComponentNamesRUSubtypesENG { get; private set; } = new Dictionary<string, string>()
-        {
+            {
             { "Бронированное стекло", "BulletproofGlass" }, { "Компьютер",  "Computer" }, { "Строительные компоненты", "Construction" },
             { "Компоненты детектора", "Detector" }, { "Экран", "Display" }, { "Взрывчатка", "Explosives" },
             { "Балка", "Girder" }, { "Компоненты гравитационного генератора", "GravityGenerator" }, { "Внутренняя пластина", "InteriorPlate" },
@@ -79,7 +79,7 @@ namespace Template
             { "Мотор", "Motor" }, { "Энергоячейка", "PowerCell" }, { "Радиокомпоненты", "RadioCommunication" },
             { "Компоненты реактора", "Reactor" }, { "Малая трубка", "SmallTube" }, { "Солнечная ячейка", "SolarCell" },
             { "Стальная пластина", "SteelPlate" }, { "Сверхпроводник", "Superconductor" }, { "Детали ионного ускорителя", "Thrust" }
-        };
+            };
 
             public static void setDefaultSurfaceView(IMyTextPanel panel)
             {
@@ -158,7 +158,10 @@ namespace Template
                     string[] componentNameAmount = newComponentString.Split('=');
 
                     // Добавляем в словарь подтип компонента и количество
-                    fillableDict.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
+                    if(InputPanelTextHelper.ComponentNamesRUSubtypesENG.Keys.Contains(componentNameAmount[0]))
+                    {
+                        fillableDict.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
+                    }                   
                 }
 
                 return true;
@@ -173,7 +176,7 @@ namespace Template
                 {
 
                 // Если подтипы пусты или инвентарь пуст
-                if (subtypeIds.IsNullOrEmpty() || items.Count < 1)
+                if (subtypeIds.Length < 1 || items.Count < 1)
                     {
                         return false;
                     }
@@ -283,7 +286,16 @@ namespace Template
             // Если парсер распарсил данные панели ввода в словарь
             if (parser.parseInputPanelText(inputPanel, subtypesAmounts))
             {
-                                
+
+                /// DEBUG START
+                Echo("Ключи словаря subtypesAmounts: " + '\n');
+
+                foreach (string subtype in subtypesAmounts.Keys)
+                {
+                    Echo(subtype + " " + subtypesAmounts[subtype] +'\n');
+                }
+                /// DEBUG END
+
                 // Инициализируем словарь типа подтип предмета - предмет
                 Dictionary<string, MyInventoryItem> subtypesItems = new Dictionary<string, MyInventoryItem>();
 
