@@ -61,7 +61,7 @@ namespace Template
             public static IMyGridTerminalSystem GridTerminalSystem { get; set; }
 
             // Состояние работы
-            public static WorkStates actualWorkState { get; set; } = Worker.WorkStates.StartWaiting;
+            public static WorkStates actualWorkState { get; set; } = Worker.WorkStates.Waiting;
 
 
 
@@ -136,7 +136,7 @@ namespace Template
             public enum WorkStates : int
             {
                 // В ожидании начала работы
-                StartWaiting,
+                Waiting,
 
                 // В процессе работы
                 InProgress,
@@ -492,6 +492,40 @@ namespace Template
         public void Main(string argument, UpdateType updateSource)
         {
 
+            switch(Worker.actualWorkState)
+            {
+                case Worker.WorkStates.Waiting:
+
+                    // Если передали аргумент "start", то начинаем работу
+                    if(argument == "start")
+                    {
+
+                        StringBuilder DEBUGSTR_1 = new StringBuilder(), DEBUGSTR_2 = new StringBuilder(), DEBUGSTR_3 = new StringBuilder();
+
+                        Worker.work(DEBUGSTR_1, DEBUGSTR_2, DEBUGSTR_3);
+                    }
+
+                    break;
+
+                case Worker.WorkStates.InProgress:
+
+                    // Ничего не делаем
+
+                    break;
+
+                case Worker.WorkStates.Paused:
+
+                    
+
+                    break;
+
+                case Worker.WorkStates.Completed:
+
+                    break;
+                default:
+                    break;
+
+            }
         }
         public void Save()
         {
