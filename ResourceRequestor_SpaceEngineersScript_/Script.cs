@@ -81,21 +81,32 @@ namespace Template
             { "Стальнаяпластина", "SteelPlate" }, { "Сверхпроводник", "Superconductor" }, { "Деталиионногоускорителя", "Thrust" }
             };
 
+            // Заглавие текста по умолчанию
+            public static string DefaultTextTitle { get; private set; } = "Список запрашиваемых компонентов: ";
+
+            // Метод установки стандартного вида дисплея
             public static void setDefaultSurfaceView(IMyTextPanel panel)
             {
                 panel.BackgroundColor = Color.Black;
                 panel.FontColor = Color.Yellow;
                 panel.FontSize = 0.7f;
             }
-
+            
+            // Метод записи стандартного текста в панель ввода
             public static void writeDefaultText(IMyTextPanel inputPanel)
             {
-                inputPanel.WriteText("Список запрашиваемых компонентов: " + '\n',false);
+                inputPanel.WriteText(DefaultTextTitle + '\n', false);
 
                 foreach (string componentNameRU in ComponentNamesRU)
                 {
                     inputPanel.WriteText(componentNameRU + " = 0" + '\n', true);
                 }
+            }
+
+            // Метод проверки строки на соответствие заглавию текста по умолчанию
+            public static bool isDefaultText(string text)
+            {
+                return text == DefaultTextTitle;
             }
         }
 
@@ -123,7 +134,14 @@ namespace Template
 
                 // Разбиваем динамическую строку на список неизменяемых строк
                 List<string> inputPanelDataStrings = tempBuilder.ToString().Split('\n').ToList<string>();
-                // Удаляем первую строку(она не нужна, т.к.не содержит данных о каком - либо компоненте)
+
+                // Если первая строка в списке - не заглавие
+                if (!InputPanelTextHelper.isDefaultText(inputPanelDataStrings[0]))
+                {
+                    return false;
+                }
+
+                // Удаляем заглавие
                 inputPanelDataStrings.Remove(inputPanelDataStrings.First());
 
                 // Если размер сформированного списка не равен заданному
@@ -173,7 +191,7 @@ namespace Template
 
             static class ItemDictionaryFiller
             {
-                // Метод заполнения словаря типа "подтип - предмет"
+                // Метод заполнения словаря типа "подтип - предмет" предметами, имеющимися в инвентаре
                 public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, List<MyInventoryItem> items)
                 {
 
@@ -222,7 +240,7 @@ namespace Template
 
 
                     // Проходим по всему словарю
-                    foreach (string subtype in subtypesAmounts.Keys)
+                    foreach (string subtype in subtypesItems.Keys)
                     {
 
                         // Если компонент не запрошен, то пропускаем его 
@@ -232,12 +250,12 @@ namespace Template
                         // Если в инвентаре недостаточно предметов необходимого типа
                         if(!startingInventory.ContainItems(subtypesAmounts[subtype], subtypesItems[subtype].Type))
                         {
-                            /// Пока останов, в будущем здесь будет запрос ресурсов, которых не хватает
-                            return false;
+                        /// Пока пропускаем перенос этого предмета, в будущем здесь будет запрос ресурсов, которых не хватает
+                        continue;
                             ///
                         }
 
-
+                        
                         // Перекидываем предметы в запрошенном количестве в пункт назначения
                         startingInventory.TransferItemTo(destinationInventory, subtypesItems[subtype], subtypesAmounts[subtype]);
 
@@ -252,8 +270,21 @@ namespace Template
 
         public Program()
         {
-            // Устанавливаем частоту тиков скрипта на 60 раз в секунду
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
+
+            // Берем панель ввода
+            IMyTextPanel inputPanel = GridTerminalSystem.GetBlockWithName(InputData.InputPanelName) as IMyTextPanel;
+            // Берем панель вывода
+            IMyTextPanel outputPanel = GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
+
+            // Устанавливаем панели вывода стандартный вид
+            InputPanelTextHelper.setDefaultSurfaceView(outputPanel);
+
+            // Устанавливаем панели ввода стандартный вид и вводим исходные данные
+            InputPanelTextHelper.setDefaultSurfaceView(inputPanel);
+            InputPanelTextHelper.writeDefaultText(inputPanel);
+
+            // Устанавливаем частоту тиков скрипта на раз в ~1.5 секунды
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
         }
 
         public void Main(string argument, UpdateType updateSource)
@@ -269,15 +300,8 @@ namespace Template
             // Берем панель вывода
             IMyTextPanel outputPanel = GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
 
-            // Устанавливаем панели вывода стандартный вид
-            InputPanelTextHelper.setDefaultSurfaceView(outputPanel);
-
-            // Устанавливаем панели ввода стандартный вид и вводим исходные данные
-            InputPanelTextHelper.setDefaultSurfaceView(inputPanel);
-            InputPanelTextHelper.writeDefaultText(inputPanel);
-
             // Записываем первую строку в панель ввода
-            outputPanel.WriteText("Полученные данные из панели ввода: " + '\n', false);
+            outputPanel.WriteText("Запрошенные ресурсы из панели ввода: " + '\n', false);
 
             // Инициализируем парсер
             InputPanelTextParser parser = new InputPanelTextParser();
@@ -322,7 +346,18 @@ namespace Template
                 }
                 /// DEBUG END
 
+                // Инициализируем переносчик
+                ItemTransferer transferer = new ItemTransferer();
 
+                // Переносим запрошенные ресурсы по запрошенному адресу
+                if(transferer.transferToByDictionaries(startingInventory, destinationInventory, subtypesItems, subtypesAmounts))
+                {
+                    Echo("Мы переместили предметы!");
+                }
+                else
+                {
+                    Echo("Перемещение предметов не удалось!");
+                }
                 
                 // TODO: вызывать ItemTransferer
 
