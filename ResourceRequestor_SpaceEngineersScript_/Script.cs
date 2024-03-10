@@ -287,8 +287,12 @@ namespace Template
                 // Инициализируем словарь типа подтип предмета - предмет
                 Dictionary<string, MyInventoryItem> subtypesItems = new Dictionary<string, MyInventoryItem>();
 
+                // Инициализируем и заполняем список предметов инвентаря
+                List<MyInventoryItem> items = new List<MyInventoryItem>();
+                startingInventory.GetItems(items);
+
                 // Заполняем словарь
-                ItemDictionaryFiller.fillSubtypeIdItemDictionary(subtypesItems, InputPanelTextHelper.ComponentSubtypes, startingInventory);
+                ItemDictionaryFiller.fillSubtypeIdItemDictionary(subtypesItems, InputPanelTextHelper.ComponentSubtypes, items);
 
                 /// DEBUG START
                 Echo("Ключи словаря subtypesItems: " + '\n');
