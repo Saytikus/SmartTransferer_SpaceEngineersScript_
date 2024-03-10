@@ -169,26 +169,18 @@ namespace Template
             static class ItemDictionaryFiller
             {
                 // Метод заполнения словаря типа "подтип - предмет"
-                public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, IMyInventory itemsInventory)
+                public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, List<MyInventoryItem> items)
                 {
-                    // Если подтипы пусты
-                    if (subtypeIds.IsNullOrEmpty())
+
+                // Если подтипы пусты или инвентарь пуст
+                if (subtypeIds.IsNullOrEmpty() || items.Count < 1)
                     {
                         return false;
                     }
 
-                    // Очищаем словарь для заполнения
-                    fillableDict.Clear();
 
-                    // Берем предметы инвентаря
-                    List<MyInventoryItem> items = new List<MyInventoryItem>();
-                    itemsInventory.GetItems(items);
-
-                    // Если инвентарь пуст
-                    if (items.Count < 1)
-                    {
-                        return false;
-                    }
+                // Очищаем словарь для заполнения
+                fillableDict.Clear();
 
                     // Проходим по всем предметам
                     foreach (MyInventoryItem item in items)
