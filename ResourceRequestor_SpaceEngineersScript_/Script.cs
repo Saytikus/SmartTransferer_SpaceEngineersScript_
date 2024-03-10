@@ -491,14 +491,6 @@ namespace Template
                     Echo("Перемещение предметов не удалось!");
                 }
 
-                // TODO: вызывать ItemTransferer
-
-                /// Устаревший код 
-                ///foreach (string componentName in parser.ComponentSubtypeIdsComponentAmounts.Keys)
-                ///{
-                ///    outputPanel.WriteText( "Компонента - " + componentName + " | Запрош. кол-во - " + parser.ComponentSubtypeIdsComponentAmounts[componentName] + '\n', true);
-                ///}
-                ///
             }
 
         }
