@@ -54,36 +54,100 @@ namespace Template
             static public string AssemblerName { get; private set; } = "Private Assembler 1";
         }
 
-        class Worker
+        static class Worker
         {
 
-            // Класс состояния работы скрипта
-            public class ActualWorkState
+            // Грид система терминала
+            public static IMyGridTerminalSystem GridTerminalSystem { get; set; }
+
+            // Состояние работы
+            public static WorkStates actualWorkState { get; set; } = Worker.WorkStates.StartWaiting;
+
+
+
+            // Методы выполнения работы ( перемещение ресурсов по запросу ) 
+            public static void work(StringBuilder DEBUGSTR_1, StringBuilder DEBUGSTR_2, StringBuilder DEBUGSTR_3)
             {
 
-                // Состояние работы скрипта
-                public WorkStates WorkState { get; set; }
+                // Устанавливаем флаг, что мы начали работу
+                Worker.actualWorkState = WorkStates.InProgress;
 
-                // Конструктор по умолчанию
-                public ActualWorkState(WorkStates state) => WorkState = state;
 
-                // Набор состояний
-                public enum WorkStates : int
+                // Берем отправной инвентарь
+                IMyInventory startingInventory = Worker.GridTerminalSystem.GetBlockWithName(InputData.StartingContainerName).GetInventory();
+                // Берем инвентарь назначения
+                IMyInventory destinationInventory = Worker.GridTerminalSystem.GetBlockWithName(InputData.DestinationContainerName).GetInventory();
+
+                // Берем панель ввода
+                IMyTextPanel inputPanel = Worker.GridTerminalSystem.GetBlockWithName(InputData.InputPanelName) as IMyTextPanel;
+                // Берем панель вывода
+                IMyTextPanel outputPanel = Worker.GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
+
+                // Записываем первую строку в панель ввода
+                outputPanel.WriteText("Запрошенные ресурсы из панели ввода: " + '\n', false);
+
+                // Инициализируем парсер
+                InputPanelTextParser parser = new InputPanelTextParser();
+
+                // Инициализируем словарь типа "подтип-количество"
+                Dictionary<string, int> subtypesAmounts = new Dictionary<string, int>();
+
+                // Если парсер распарсил данные панели ввода в словарь
+                if (parser.parseInputPanelText(inputPanel, subtypesAmounts, DEBUGSTR_1))
                 {
-                    // В ожидании начала работы
-                    StartWaiting,
 
-                    // В процессе работы
-                    InProgress,
+                    // Инициализируем словарь типа подтип предмета - предмет
+                    Dictionary<string, MyInventoryItem> subtypesItems = new Dictionary<string, MyInventoryItem>();
 
-                    // Работа заморожена
-                    Frozen,
+                    // Инициализируем и заполняем список предметов инвентаря
+                    List<MyInventoryItem> items = new List<MyInventoryItem>();
+                    startingInventory.GetItems(items);
 
-                    // Работа завершена
-                    Completed
+                    // Заполняем словарь
+                    ItemDictionaryFiller.fillSubtypeIdItemDictionary(subtypesItems, InputPanelTextHelper.ComponentSubtypes, items);
+
+                    // Инициализируем переносчик
+                    SmartItemTransferer smartTransferer = new SmartItemTransferer();
+
+                    // Инициализируем менеджер сборщика
+                    AssemblerManager asmManager = new AssemblerManager(Worker.GridTerminalSystem.GetBlockWithName(InputData.AssemblerName) as IMyAssembler);
+
+                    // Переносим запрошенные ресурсы по запрошенному адресу
+                    if (smartTransferer.smartTransferTo(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager, DEBUGSTR_2))
+                    {
+                        DEBUGSTR_3.AppendLine("Мы переместили предметы!");
+                    }
+                    else
+                    {
+                        DEBUGSTR_3.AppendLine("Перемещение предметов не удалось!");
+                    }
+
                 }
+            }
+
+            // Метод возобновления работы
+            public static void workResumption(StringBuilder DEBUGSTR_1, StringBuilder DEBUGSTR_2, StringBuilder DEBUGSTR_3)
+            {
 
             }
+
+
+            // Набор состояний
+            public enum WorkStates : int
+            {
+                // В ожидании начала работы
+                StartWaiting,
+
+                // В процессе работы
+                InProgress,
+
+                // Работа приостановлена
+                Paused,
+
+                // Работа завершена
+                Completed
+            }
+
         }
 
 
@@ -427,84 +491,6 @@ namespace Template
 
         public void Main(string argument, UpdateType updateSource)
         {
-
-            // Берем отправной инвентарь
-            IMyInventory startingInventory = GridTerminalSystem.GetBlockWithName(InputData.StartingContainerName).GetInventory();
-            // Берем инвентарь назначения
-            IMyInventory destinationInventory = GridTerminalSystem.GetBlockWithName(InputData.DestinationContainerName).GetInventory();
-
-            // Берем панель ввода
-            IMyTextPanel inputPanel = GridTerminalSystem.GetBlockWithName(InputData.InputPanelName) as IMyTextPanel;
-            // Берем панель вывода
-            IMyTextPanel outputPanel = GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
-
-            // Записываем первую строку в панель ввода
-            outputPanel.WriteText("Запрошенные ресурсы из панели ввода: " + '\n', false);
-
-            // Инициализируем парсер
-            InputPanelTextParser parser = new InputPanelTextParser();
-
-            // Инициализируем словарь типа "подтип-количество"
-            Dictionary<string, int> subtypesAmounts = new Dictionary<string, int>();
-
-            /// DEBUG START
-            StringBuilder DEBUGSTR_1 = new StringBuilder();
-            /// DEBUG END
-
-            // Если парсер распарсил данные панели ввода в словарь
-            if (parser.parseInputPanelText(inputPanel, subtypesAmounts, DEBUGSTR_1))
-            {
-
-                /// DEBUG START
-                Echo(DEBUGSTR_1.ToString());
-                Echo("Ключи словаря subtypesAmounts: " + '\n');
-
-                foreach (string subtype in subtypesAmounts.Keys)
-                {
-                    Echo(subtype + " " + subtypesAmounts[subtype] + '\n');
-                }
-                /// DEBUG END
-
-                // Инициализируем словарь типа подтип предмета - предмет
-                Dictionary<string, MyInventoryItem> subtypesItems = new Dictionary<string, MyInventoryItem>();
-
-                // Инициализируем и заполняем список предметов инвентаря
-                List<MyInventoryItem> items = new List<MyInventoryItem>();
-                startingInventory.GetItems(items);
-
-                // Заполняем словарь
-                ItemDictionaryFiller.fillSubtypeIdItemDictionary(subtypesItems, InputPanelTextHelper.ComponentSubtypes, items);
-
-                /// DEBUG START
-                Echo("Ключи словаря subtypesItems: " + '\n');
-
-                foreach (string subtype in subtypesItems.Keys)
-                {
-                    Echo(subtype + '\n');
-                }
-                /// DEBUG END
-
-                // Инициализируем переносчик
-                SmartItemTransferer smartTransferer = new SmartItemTransferer();
-
-                // Инициализируем менеджер сборщика
-                AssemblerManager asmManager = new AssemblerManager(GridTerminalSystem.GetBlockWithName(InputData.AssemblerName) as IMyAssembler);
-
-                /// DEBUG START
-                StringBuilder DEBUGSTR_2 = new StringBuilder();
-                /// DEBUG END
-
-                // Переносим запрошенные ресурсы по запрошенному адресу
-                if (smartTransferer.smartTransferTo(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager, DEBUGSTR_2))
-                {
-                    Echo("Мы переместили предметы!");
-                }
-                else
-                {
-                    Echo("Перемещение предметов не удалось!");
-                }
-
-            }
 
         }
         public void Save()
