@@ -105,14 +105,11 @@ namespace Template
             // Необходимый размер данных
             public const int requiredDataStringsSize = 22;
 
-            // Словарь подтип-запрошенное кол-во предмета 
-            // TODO: Перенести его в параметр метода parseInputPanelText и заполнять по ссылке
-            public Dictionary<string, int> ComponentSubtypeIdsComponentAmounts { get; private set; } = new Dictionary<string, int>();
-
-            public bool parseInputPanelText(IMyTextPanel inputPanel)
+            // Метод формирующий словарь типа "подтип-количество" из данных панели ввода
+            public bool parseInputPanelText(IMyTextPanel inputPanel, Dictionary<string, int> fillableDict)
             {
-                // Очищаем словарь имён компонентов и количества предметов
-                this.ComponentSubtypeIdsComponentAmounts.Clear();
+                // Очищаем заполняемый словарь
+                fillableDict.Clear();
 
                 // Инициализируем и заполняем динамическую строку текстом из панели ввода
                 StringBuilder tempBuilder = new StringBuilder();
@@ -149,7 +146,7 @@ namespace Template
                     if (!componentString.Contains(' ') || !componentString.Contains('='))
                     {
                         // Очищаем словарь т.к. в него уже могли добавится данные, без очистки словаря при обрыве его заполнения в нём останется мусор
-                        this.ComponentSubtypeIdsComponentAmounts.Clear();
+                        fillableDict.Clear();
                         return false;
                     }
 
@@ -161,7 +158,7 @@ namespace Template
                     string[] componentNameAmount = newComponentString.Split('=');
 
                     // Добавляем в словарь подтип компонента и количество
-                    this.ComponentSubtypeIdsComponentAmounts.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
+                    fillableDict.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
                 }
 
                 return true;
@@ -171,16 +168,17 @@ namespace Template
 
             static class ItemDictionaryFiller
             {
-                public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> subtypeIDsItems, List<string> subtypeIds, IMyInventory itemsInventory)
+                // Метод заполнения словаря типа "подтип - предмет"
+                public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, IMyInventory itemsInventory)
                 {
                     // Если подтипы пусты
-                    if (subtypeIds.Count < 1)
+                    if (subtypeIds.IsNullOrEmpty())
                     {
                         return false;
                     }
 
                     // Очищаем словарь для заполнения
-                    subtypeIDsItems.Clear();
+                    fillableDict.Clear();
 
                     // Берем предметы инвентаря
                     List<MyInventoryItem> items = new List<MyInventoryItem>();
@@ -197,11 +195,11 @@ namespace Template
                     {
 
                         // Проходим по всем подтипам предметов
-                        foreach (string subtypeId in InputPanelTextHelper.ComponentNamesRUSubtypesENG.Values)
+                        foreach (string subtype in InputPanelTextHelper.ComponentNamesRUSubtypesENG.Values)
                         {
 
                             // Если подтип предмета равен подтипу из имеющихся, то добавляем их в словарь
-                            if (item.Type.SubtypeId == subtypeId) subtypeIDsItems.Add(subtypeId, item);
+                            if (item.Type.SubtypeId == subtype)  fillableDict.Add(subtype, item);
 
                         }
 
@@ -211,29 +209,31 @@ namespace Template
                 }
             }
 
-            // Класс переброски предметов из одного инвентаря в другой инвентарь
+            // Класс перемещения предметов из одного инвентаря в другой инвентарь
             class ItemTransferer
             {
-                public bool transferToByDictionary(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypeIDsItems, Dictionary<string, int> componentSubtypeIdsComponentAmounts)
+
+                // Метод перемещения из одного инвентаря в другой с использованием 2-ух словарей: словарь типа "подтип-предмет" и словарь типа "подтип-количество"
+                public bool transferToByDictionaries(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts)
                 {
 
                     // Если инвентари некорректны или словари пусты
-                    if (startingInventory == null || destinationInventory == null || componentSubtypeIdsComponentAmounts.Count < 1 || subtypeIDsItems.Count < 1)
+                    if (startingInventory == null || destinationInventory == null || subtypesAmounts.Count < 1 || subtypesItems.Count < 1)
                     {
                         return false;
                     }
 
 
                     // Проходим по всему словарю
-                    foreach (string subtypeId in componentSubtypeIdsComponentAmounts.Keys)
+                    foreach (string subtype in subtypesAmounts.Keys)
                     {
 
                         // Если компонент не запрошен, то пропускаем его 
-                        if (componentSubtypeIdsComponentAmounts[subtypeId] < 0) continue;
+                        if (subtypesAmounts[subtype] < 0) continue;
 
 
                         // Если в инвентаре недостаточно предметов необходимого типа
-                        if(!startingInventory.ContainItems(componentSubtypeIdsComponentAmounts[subtypeId], subtypeIDsItems[subtypeId].Type))
+                        if(!startingInventory.ContainItems(subtypesAmounts[subtype], subtypesItems[subtype].Type))
                         {
                             /// Пока останов, в будущем здесь будет запрос ресурсов, которых не хватает
                             return false;
@@ -242,7 +242,7 @@ namespace Template
 
 
                         // Перекидываем предметы в запрошенном количестве в пункт назначения
-                        startingInventory.TransferItemTo(destinationInventory, subtypeIDsItems[subtypeId], componentSubtypeIdsComponentAmounts[subtypeId]);
+                        startingInventory.TransferItemTo(destinationInventory, subtypesItems[subtype], subtypesAmounts[subtype]);
 
                     }
 
@@ -285,10 +285,30 @@ namespace Template
             // Инициализируем парсер
             InputPanelTextParser parser = new InputPanelTextParser();
 
-            // Если парсер распарсил данные панели ввода
-            if (parser.parseInputPanelText(inputPanel))
+            // Инициализируем словарь типа "подтип-количество"
+            Dictionary<string, int> subtypesAmounts = new Dictionary<string, int>();
+
+            // Если парсер распарсил данные панели ввода в словарь
+            if (parser.parseInputPanelText(inputPanel, subtypesAmounts))
             {
-                ItemTransferer transferer;
+                                
+                // Инициализируем словарь типа подтип предмета - предмет
+                Dictionary<string, MyInventoryItem> subtypesItems = new Dictionary<string, MyInventoryItem>();
+
+                // Заполняем словарь
+                ItemDictionaryFiller.fillSubtypeIdItemDictionary(subtypesItems, InputPanelTextHelper.ComponentSubtypes, startingInventory);
+
+                /// DEBUG START
+                Echo("Ключи словаря subtypesItems: " + '\n');
+
+                foreach (string subtype in subtypesItems.Keys)
+                {
+                    Echo(subtype + '\n');
+                }
+                /// DEBUG END
+
+
+                
                 // TODO: вызывать ItemTransferer
 
                 /// Устаревший код 
