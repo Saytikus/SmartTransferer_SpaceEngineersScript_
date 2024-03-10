@@ -34,41 +34,17 @@ namespace Template
          */
         static class InputData
         {
-            // Переменная для определения имени панели ввода
+            // Имя панели ввода
             static public string InputPanelName { get; private set; } = "Input Panel 1";
 
-            // Переменная для определения имени панели вывода
+            // Имя панели вывода
             static public string OutputPanelName { get; private set; } = "Output Panel 1";
 
+            //  Имя отправного контейнера
             static public string StartingContainerName { get; private set; } = "Starting Container 1";
 
+            // Имя конечного контейнера
             static public string DestinationContainerName { get; private set; } = "Destination Container 1";
-        }
-
-        /** BlockGetter - класс для получения блоков грида по имени.
-         * 
-         */
-        static class BlockGetter
-        {
-            /** getPanel - метод получения Text Panel по имени.
-             * system - система терминала
-             * name - имя блока Text Panel
-             * return Объект IMyTextPanel
-             */
-            public static IMyTextPanel getPanel(IMyGridTerminalSystem system, string name)
-            {
-
-                // Возвращаем блок с именем name из грида как IMyTextPanel
-                return system.GetBlockWithName(name) as IMyTextPanel;
-            }
-
-            public static IMyCargoContainer getContainer(IMyGridTerminalSystem system, string name)
-            {
-
-                //
-                return system.GetBlockWithName(name) as IMyCargoContainer;
-            }
-
         }
 
         // Класс, содержащий utils данные и методы для панели ввода
@@ -190,6 +166,7 @@ namespace Template
 
                 return true;
             }
+        }
 
 
             static class ItemDictionaryFiller
@@ -273,7 +250,6 @@ namespace Template
                     return true;
                 }
             }
-        }
 
 
 
@@ -285,16 +261,16 @@ namespace Template
 
         public void Main(string argument, UpdateType updateSource)
         {
-       
+            
             // Берем отправной инвентарь
-            IMyInventory startingInventory = BlockGetter.getContainer(GridTerminalSystem, InputData.StartingContainerName).GetInventory();
+            IMyInventory startingInventory = GridTerminalSystem.GetBlockWithName(InputData.StartingContainerName).GetInventory();
             // Берем инвентарь назначения
-            IMyInventory destinationInventory = BlockGetter.getContainer(GridTerminalSystem, InputData.DestinationContainerName).GetInventory();
+            IMyInventory destinationInventory = GridTerminalSystem.GetBlockWithName(InputData.DestinationContainerName).GetInventory();
 
             // Берем панель ввода
-            IMyTextPanel inputPanel = BlockGetter.getPanel(GridTerminalSystem, InputData.InputPanelName);
+            IMyTextPanel inputPanel = GridTerminalSystem.GetBlockWithName(InputData.InputPanelName) as IMyTextPanel;
             // Берем панель вывода
-            IMyTextPanel outputPanel = BlockGetter.getPanel(GridTerminalSystem, InputData.OutputPanelName);
+            IMyTextPanel outputPanel = GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
 
             // Устанавливаем панели вывода стандартный вид
             InputPanelTextHelper.setDefaultSurfaceView(outputPanel);
@@ -312,7 +288,7 @@ namespace Template
             // Если парсер распарсил данные панели ввода
             if (parser.parseInputPanelText(inputPanel))
             {
-
+                ItemTransferer transferer;
                 // TODO: вызывать ItemTransferer
 
                 /// Устаревший код 
