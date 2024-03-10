@@ -54,23 +54,36 @@ namespace Template
             static public string AssemblerName { get; private set; } = "Private Assembler 1";
         }
 
-        // Глобальный класс состояния работы скрипта
-        static class ActualWorkState
+        class Worker
         {
 
-            public static WorkStates ActualState { get; set; }
-
-            public enum WorkStates : int
+            // Класс состояния работы скрипта
+            public class ActualWorkState
             {
-                StartWaiting,
 
-                InProgress,
+                // Состояние работы скрипта
+                public WorkStates WorkState { get; set; }
 
-                Frozen,
+                // Конструктор по умолчанию
+                public ActualWorkState(WorkStates state) => WorkState = state;
 
-                Completed
+                // Набор состояний
+                public enum WorkStates : int
+                {
+                    // В ожидании начала работы
+                    StartWaiting,
+
+                    // В процессе работы
+                    InProgress,
+
+                    // Работа заморожена
+                    Frozen,
+
+                    // Работа завершена
+                    Completed
+                }
+
             }
-
         }
 
 
