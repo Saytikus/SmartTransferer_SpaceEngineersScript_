@@ -116,6 +116,9 @@ namespace Template
                     if (smartTransferer.smartTransferTo(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager, DEBUGSTR_2))
                     {
                         DEBUGSTR_3.AppendLine("Мы переместили предметы!");
+
+                        // Устанавливаем флаг о завершении работы
+                        Worker.actualWorkState = Worker.WorkStates.Completed;
                     }
                     else
                     {
@@ -129,6 +132,29 @@ namespace Template
             public static void workResumption(StringBuilder DEBUGSTR_1, StringBuilder DEBUGSTR_2, StringBuilder DEBUGSTR_3)
             {
 
+                // Устанавливаем флаг, что работа снова в процесса
+                Worker.actualWorkState = Worker.WorkStates.InProgress;
+
+                // Вынимаем из снимка умный переносчик предметов
+                SmartItemTransferer smartTransferer = SmartItemTransfererSnapshot.Transferer;
+
+                // Продолжаем умный перенос предметов
+                if(smartTransferer.smartTransferTo(SmartItemTransfererSnapshot.Snapshot.StartingInventory,
+                                                SmartItemTransfererSnapshot.Snapshot.DestinationInventory,
+                                                SmartItemTransfererSnapshot.Snapshot.SubtypesItems,
+                                                SmartItemTransfererSnapshot.Snapshot.SubtypesAmounts,
+                                                SmartItemTransfererSnapshot.Snapshot.AsmManager,
+                                                SmartItemTransfererSnapshot.Snapshot.DEBUGSTR))
+                {
+                    DEBUGSTR_3.AppendLine("Мы переместили предметы!");
+
+                    // Устанавливаем флаг о завершении работы
+                    Worker.actualWorkState = Worker.WorkStates.Completed;
+                }
+                else
+                {
+                    DEBUGSTR_3.AppendLine("Перемещение предметов не удалось!");
+                }
             }
 
 
@@ -181,14 +207,14 @@ namespace Template
                 public Dictionary<string, MyInventoryItem> SubtypesItems { get; private set; }
 
                 // Словарь типа "подтип-количество"
-                Dictionary<string, int> SubtypesAmounts { get; }
+                public Dictionary<string, int> SubtypesAmounts { get; }
 
                 // Менеджер сборщика
-                AssemblerManager AsmManager { get; }
+                public AssemblerManager AsmManager { get; }
 
                 ///
                 /// DEBUGSTR
-                StringBuilder DEBUGSTR { get; }
+                public StringBuilder DEBUGSTR { get; }
                 ///
 
                 // Конструктор по умолчанию
@@ -449,6 +475,9 @@ namespace Template
                         // Сохраняем глобальный снимок себя
                         SmartItemTransfererSnapshot.saveSnapshot(this, new SmartItemTransfererSnapshot.SmartTransferToSnapshot(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager, DEBUGSTR));
 
+                        // Устанавливаем приостановленный статус работе
+                        Worker.actualWorkState = Worker.WorkStates.Paused;
+
                         // Возвращаем ответ о том, что мы не перенесли предметы ( просто не закончили )
                         return false;
 
@@ -492,16 +521,16 @@ namespace Template
         public void Main(string argument, UpdateType updateSource)
         {
 
-            switch(Worker.actualWorkState)
+            StringBuilder DEBUGSTR_1 = new StringBuilder(), DEBUGSTR_2 = new StringBuilder(), DEBUGSTR_3 = new StringBuilder();
+
+            switch (Worker.actualWorkState)
             {
                 case Worker.WorkStates.Waiting:
 
                     // Если передали аргумент "start", то начинаем работу
                     if(argument == "start")
                     {
-
-                        StringBuilder DEBUGSTR_1 = new StringBuilder(), DEBUGSTR_2 = new StringBuilder(), DEBUGSTR_3 = new StringBuilder();
-
+                       
                         Worker.work(DEBUGSTR_1, DEBUGSTR_2, DEBUGSTR_3);
                     }
 
@@ -515,13 +544,39 @@ namespace Template
 
                 case Worker.WorkStates.Paused:
 
-                    
+                    // Пытаемся восстановить работу
+                    Worker.workResumption(DEBUGSTR_1, DEBUGSTR_2, DEBUGSTR_3);
 
                     break;
 
                 case Worker.WorkStates.Completed:
 
+                    // Меняем частоту тиков скрипта на отсутствие тиков
+                    Runtime.UpdateFrequency = UpdateFrequency.None;
+
+                    // Тута выводим лог о завершении работы
+                    //
+
+                    // Засыпаем на 3 секунды
+                    System.Threading.Thread.Sleep(3000);
+
+                    // Устанавливаем стандартные значения после таймаута
+                    // TODO: вынести это и это же из Program() в класс
+                    IMyTextPanel inputPanel = GridTerminalSystem.GetBlockWithName(InputData.InputPanelName) as IMyTextPanel;
+                    IMyTextPanel outputPanel = GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
+
+
+                    InputPanelTextHelper.setDefaultSurfaceView(outputPanel);
+                    InputPanelTextHelper.setDefaultSurfaceView(inputPanel);
+                    InputPanelTextHelper.writeDefaultText(inputPanel);
+
+                    // Возвращаем частоту тиков
+                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
+
                     break;
+
+
+
                 default:
                     break;
 
