@@ -63,22 +63,22 @@ namespace Template
             // Список имён компонентов на русском языке
             public static string[] ComponentNamesRU { get; private set; } = new string[21]
             {
-            "Бронированное стекло", "Компьютер", "Строительные компоненты", "Компоненты детектора", "Экран", "Взрывчатка",
-            "Балка", "Компоненты гравитационного генератора", "Внутренняя пластина", "Большая стальная труба", "Медицинские компоненты", "Компонент решётки", "Мотор",
-            "Энергоячейка", "Радиокомпоненты", "Компоненты реактора", "Малая трубка", "Солнечная ячейка", "Стальная пластина", "Сверхпроводник",
-            "Детали ионного ускорителя"
+            "Бронированноестекло", "Компьютер", "Строительныекомпоненты", "Компонентыдетектора", "Экран", "Взрывчатка",
+            "Балка", "Компонентыгравитационногогенератора", "Внутренняя пластина", "Большаястальнаятруба", "Медицинскиекомпоненты", "Компонентрешётки", "Мотор",
+            "Энергоячейка", "Радиокомпоненты", "Компонентыреактора", "Малаятрубка", "Солнечнаяячейка", "Стальнаяпластина", "Сверхпроводник",
+            "Деталиионногоускорителя"
             };
 
             // Словарь имя компонента на русском - подтип компонента
             public static Dictionary<string, string> ComponentNamesRUSubtypesENG { get; private set; } = new Dictionary<string, string>()
             {
-            { "Бронированное стекло", "BulletproofGlass" }, { "Компьютер",  "Computer" }, { "Строительные компоненты", "Construction" },
-            { "Компоненты детектора", "Detector" }, { "Экран", "Display" }, { "Взрывчатка", "Explosives" },
-            { "Балка", "Girder" }, { "Компоненты гравитационного генератора", "GravityGenerator" }, { "Внутренняя пластина", "InteriorPlate" },
-            { "Большая стальная труба", "LargeTube" }, { "Медицинские компоненты", "Medical" }, { "Компонент решётки", "MetalGrid" },
+            { "Бронированноестекло", "BulletproofGlass" }, { "Компьютер",  "Computer" }, { "Строительныекомпоненты", "Construction" },
+            { "Компонентыдетектора", "Detector" }, { "Экран", "Display" }, { "Взрывчатка", "Explosives" },
+            { "Балка", "Girder" }, { "Компонентыгравитационногогенератора", "GravityGenerator" }, { "Внутренняяпластина", "InteriorPlate" },
+            { "Большаястальнаятруба", "LargeTube" }, { "Медицинскиекомпоненты", "Medical" }, { "Компонентрешётки", "MetalGrid" },
             { "Мотор", "Motor" }, { "Энергоячейка", "PowerCell" }, { "Радиокомпоненты", "RadioCommunication" },
-            { "Компоненты реактора", "Reactor" }, { "Малая трубка", "SmallTube" }, { "Солнечная ячейка", "SolarCell" },
-            { "Стальная пластина", "SteelPlate" }, { "Сверхпроводник", "Superconductor" }, { "Детали ионного ускорителя", "Thrust" }
+            { "Компонентыреактора", "Reactor" }, { "Малаятрубка", "SmallTube" }, { "Солнечнаяячейка", "SolarCell" },
+            { "Стальнаяпластина", "SteelPlate" }, { "Сверхпроводник", "Superconductor" }, { "Деталиионногоускорителя", "Thrust" }
             };
 
             public static void setDefaultSurfaceView(IMyTextPanel panel)
@@ -106,7 +106,7 @@ namespace Template
             public const int requiredDataStringsSize = 22;
 
             // Метод формирующий словарь типа "подтип-количество" из данных панели ввода
-            public bool parseInputPanelText(IMyTextPanel inputPanel, Dictionary<string, int> fillableDict)
+            public bool parseInputPanelText(IMyTextPanel inputPanel, Dictionary<string, int> fillableDict, StringBuilder DEBUGSTR)
             {
                 // Очищаем заполняемый словарь
                 fillableDict.Clear();
@@ -160,8 +160,10 @@ namespace Template
                     // Добавляем в словарь подтип компонента и количество
                     if(InputPanelTextHelper.ComponentNamesRUSubtypesENG.Keys.Contains(componentNameAmount[0]))
                     {
+                        DEBUGSTR.Append("ComponentNamesRUSubtypesENG содержит подтип " + componentNameAmount[0]);
                         fillableDict.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
-                    }                   
+                    }
+                    DEBUGSTR.Append("ComponentNamesRUSubtypesENG не содержит подтип " + componentNameAmount[0]);
                 }
 
                 return true;
@@ -283,11 +285,16 @@ namespace Template
             // Инициализируем словарь типа "подтип-количество"
             Dictionary<string, int> subtypesAmounts = new Dictionary<string, int>();
 
+            /// DEBUG START
+            StringBuilder DEBUGSTR = new StringBuilder();
+            /// DEBUG END
+            
             // Если парсер распарсил данные панели ввода в словарь
-            if (parser.parseInputPanelText(inputPanel, subtypesAmounts))
+            if (parser.parseInputPanelText(inputPanel, subtypesAmounts, DEBUGSTR))
             {
 
                 /// DEBUG START
+                Echo(DEBUGSTR.ToString());
                 Echo("Ключи словаря subtypesAmounts: " + '\n');
 
                 foreach (string subtype in subtypesAmounts.Keys)
