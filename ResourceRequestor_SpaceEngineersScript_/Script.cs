@@ -22,8 +22,9 @@ using Sandbox.Game.Debugging;
 using VRage;
 using Sandbox.Definitions;
 using System.Diagnostics;
+//using Sandbox.ModAPI;
 //using VRage.Game.ModAPI;
-//using  Sandbox.ModAPI;
+
 
 namespace Template
 {
@@ -48,7 +49,88 @@ namespace Template
 
             // Имя конечного контейнера
             static public string DestinationContainerName { get; private set; } = "Destination Container 1";
+
+            // Имя сборщика
+            static public string AssemblerName { get; private set; } = "Private Assembler 1";
         }
+
+        // Глобальный класс состояния работы скрипта
+        static class ActualWorkState
+        {
+
+            public static WorkStates ActualState { get; set; }
+
+            public enum WorkStates : int
+            {
+                StartWaiting,
+
+                InProgress,
+
+                Frozen,
+
+                Completed
+            }
+
+        }
+
+
+        // Глобальный класс снимка умного переносчика ресурсов
+        static class SmartItemTransfererSnapshot
+        {
+
+            // Переносчик предметов
+            public static SmartItemTransferer Transferer { get; private set; }
+
+            // Снимок метода smartTransferTo
+            public static SmartTransferToSnapshot Snapshot { get; private set; }
+
+            public static void saveSnapshot(SmartItemTransferer transferer, SmartTransferToSnapshot snapshot)
+            {
+                SmartItemTransfererSnapshot.Transferer = transferer;
+                SmartItemTransfererSnapshot.Snapshot = snapshot;
+            }
+
+            // Класс-снимок метода smartTransferTo класса ItemTransferer
+            public class SmartTransferToSnapshot
+            {
+
+                // Отправной инвентарь
+                public IMyInventory StartingInventory { get; private set; }
+
+                // Инвентарь назначения
+                public IMyInventory DestinationInventory { get; private set; }
+
+                // Словарь типа "подтип-предмет"
+                public Dictionary<string, MyInventoryItem> SubtypesItems { get; private set; }
+
+                // Словарь типа "подтип-количество"
+                Dictionary<string, int> SubtypesAmounts { get; }
+
+                // Менеджер сборщика
+                AssemblerManager AsmManager { get; }
+
+                ///
+                /// DEBUGSTR
+                StringBuilder DEBUGSTR { get; }
+                ///
+
+                // Конструктор по умолчанию
+                public SmartTransferToSnapshot(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts, AssemblerManager asmManager, StringBuilder DEBUGSTR)
+                {
+                    this.StartingInventory = startingInventory;
+                    this.DestinationInventory = destinationInventory;
+                    this.SubtypesItems = subtypesItems;
+                    this.SubtypesAmounts = subtypesAmounts;
+                    this.AsmManager = asmManager;
+                    this.DEBUGSTR = DEBUGSTR;
+                }
+            }
+        }
+
+
+
+
+
 
         // Класс, содержащий utils данные и методы для панели ввода
         static class InputPanelTextHelper
@@ -246,16 +328,16 @@ namespace Template
                 MyFixedPoint fpAmount = amount;
 
                 // Добавляем в очередь создание предмета item в количестве amount
-                this.Assembler.AddQueueItem(defID, fpAmount);               
+                this.Assembler.AddQueueItem(defID, fpAmount);
             }
         }
 
         // Класс перемещения предметов из одного инвентаря в другой инвентарь
-        class ItemTransferer
+        class SmartItemTransferer
         {
 
             // Метод перемещения из одного инвентаря в другой с использованием 2-ух словарей: словарь типа "подтип-предмет" и словарь типа "подтип-количество"
-            public bool smartTransferToByDictionaries(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts, AssemblerManager asmManager, StringBuilder DEBUGSTR)
+            public bool smartTransferTo(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts, AssemblerManager asmManager, StringBuilder DEBUGSTR)
             {
 
                 // Если инвентари некорректны или словари пусты
@@ -269,24 +351,39 @@ namespace Template
                 foreach (string subtype in subtypesItems.Keys)
                 {
 
-                    // Если компонент не запрошен, то пропускаем его 
-                    if (subtypesAmounts[subtype] < 0) continue;
+                    // Если компонент не запрошен 
+                    if (subtypesAmounts[subtype] < 0)
+                    {
+                        // Удаляем данные о нем из словаря subtypesItems
+                        subtypesItems.Remove(subtype);
+
+                        // Пропускаем его
+                        continue;
+                    }
 
 
                     // Если в инвентаре недостаточно предметов необходимого типа
                     if (!startingInventory.ContainItems(subtypesAmounts[subtype], subtypesItems[subtype].Type))
                     {
-                        /// Пока пропускаем перенос этого предмета, в будущем здесь будет запрос ресурсов, которых не хватает
-                        //continue;
+
                         // Собираем необходимые предметы
                         asmManager.assembleItem(subtypesItems[subtype], subtypesAmounts[subtype], DEBUGSTR);
-                        ///
+
+                        // Сохраняем глобальный снимок себя
+                        SmartItemTransfererSnapshot.saveSnapshot(this, new SmartItemTransfererSnapshot.SmartTransferToSnapshot(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager, DEBUGSTR));
+
+                        // Возвращаем ответ о том, что мы не перенесли предметы ( просто не закончили )
+                        return false;
+
+
                     }
 
 
                     // Перекидываем предметы в запрошенном количестве в пункт назначения
                     startingInventory.TransferItemTo(destinationInventory, subtypesItems[subtype], subtypesAmounts[subtype]);
 
+                    // Удаляем данные о предмете из словаря subtypesItems
+                    subtypesItems.Remove(subtype);
                 }
 
 
@@ -338,15 +435,15 @@ namespace Template
             Dictionary<string, int> subtypesAmounts = new Dictionary<string, int>();
 
             /// DEBUG START
-            StringBuilder DEBUGSTR = new StringBuilder();
+            StringBuilder DEBUGSTR_1 = new StringBuilder();
             /// DEBUG END
 
             // Если парсер распарсил данные панели ввода в словарь
-            if (parser.parseInputPanelText(inputPanel, subtypesAmounts, DEBUGSTR))
+            if (parser.parseInputPanelText(inputPanel, subtypesAmounts, DEBUGSTR_1))
             {
 
                 /// DEBUG START
-                Echo(DEBUGSTR.ToString());
+                Echo(DEBUGSTR_1.ToString());
                 Echo("Ключи словаря subtypesAmounts: " + '\n');
 
                 foreach (string subtype in subtypesAmounts.Keys)
@@ -375,10 +472,17 @@ namespace Template
                 /// DEBUG END
 
                 // Инициализируем переносчик
-                ItemTransferer transferer = new ItemTransferer();
+                SmartItemTransferer smartTransferer = new SmartItemTransferer();
+
+                // Инициализируем менеджер сборщика
+                AssemblerManager asmManager = new AssemblerManager(GridTerminalSystem.GetBlockWithName(InputData.AssemblerName) as IMyAssembler);
+
+                /// DEBUG START
+                StringBuilder DEBUGSTR_2 = new StringBuilder();
+                /// DEBUG END
 
                 // Переносим запрошенные ресурсы по запрошенному адресу
-                if (transferer.transferToByDictionaries(startingInventory, destinationInventory, subtypesItems, subtypesAmounts))
+                if (smartTransferer.smartTransferTo(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager, DEBUGSTR_2))
                 {
                     Echo("Мы переместили предметы!");
                 }
