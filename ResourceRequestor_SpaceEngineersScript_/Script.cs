@@ -19,6 +19,9 @@ using Sandbox.Game.GameSystems;
 using System.CodeDom;
 using System.Collections.ObjectModel;
 using Sandbox.Game.Debugging;
+using VRage;
+using Sandbox.Definitions;
+using System.Diagnostics;
 //using VRage.Game.ModAPI;
 //using  Sandbox.ModAPI;
 
@@ -91,7 +94,7 @@ namespace Template
                 panel.FontColor = Color.Yellow;
                 panel.FontSize = 0.7f;
             }
-            
+
             // Метод записи стандартного текста в панель ввода
             public static void writeDefaultText(IMyTextPanel inputPanel)
             {
@@ -176,7 +179,7 @@ namespace Template
                     string[] componentNameAmount = newComponentString.Split('=');
 
                     // Добавляем в словарь подтип компонента и количество
-                    if(InputPanelTextHelper.ComponentNamesRUSubtypesENG.Keys.Contains(componentNameAmount[0]))
+                    if (InputPanelTextHelper.ComponentNamesRUSubtypesENG.Keys.Contains(componentNameAmount[0]))
                     {
                         DEBUGSTR.Append("ComponentNamesRUSubtypesENG содержит подтип " + componentNameAmount[0]);
                         fillableDict.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
@@ -189,82 +192,107 @@ namespace Template
         }
 
 
-            static class ItemDictionaryFiller
+        static class ItemDictionaryFiller
+        {
+            // Метод заполнения словаря типа "подтип - предмет" предметами, имеющимися в инвентаре
+            public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, List<MyInventoryItem> items)
             {
-                // Метод заполнения словаря типа "подтип - предмет" предметами, имеющимися в инвентаре
-                public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, List<MyInventoryItem> items)
-                {
 
                 // Если подтипы пусты или инвентарь пуст
                 if (subtypeIds.Length < 1 || items.Count < 1)
-                    {
-                        return false;
-                    }
+                {
+                    return false;
+                }
 
 
                 // Очищаем словарь для заполнения
                 fillableDict.Clear();
 
-                    // Проходим по всем предметам
-                    foreach (MyInventoryItem item in items)
-                    {
-
-                        // Проходим по всем подтипам предметов
-                        foreach (string subtype in InputPanelTextHelper.ComponentNamesRUSubtypesENG.Values)
-                        {
-
-                            // Если подтип предмета равен подтипу из имеющихся, то добавляем их в словарь
-                            if (item.Type.SubtypeId == subtype)  fillableDict.Add(subtype, item);
-
-                        }
-
-                    }
-
-                    return true;
-                }
-            }
-
-            // Класс перемещения предметов из одного инвентаря в другой инвентарь
-            class ItemTransferer
-            {
-
-                // Метод перемещения из одного инвентаря в другой с использованием 2-ух словарей: словарь типа "подтип-предмет" и словарь типа "подтип-количество"
-                public bool transferToByDictionaries(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts)
+                // Проходим по всем предметам
+                foreach (MyInventoryItem item in items)
                 {
 
-                    // Если инвентари некорректны или словари пусты
-                    if (startingInventory == null || destinationInventory == null || subtypesAmounts.Count < 1 || subtypesItems.Count < 1)
-                    {
-                        return false;
-                    }
-
-
-                    // Проходим по всему словарю
-                    foreach (string subtype in subtypesItems.Keys)
+                    // Проходим по всем подтипам предметов
+                    foreach (string subtype in InputPanelTextHelper.ComponentNamesRUSubtypesENG.Values)
                     {
 
-                        // Если компонент не запрошен, то пропускаем его 
-                        if (subtypesAmounts[subtype] < 0) continue;
-
-
-                        // Если в инвентаре недостаточно предметов необходимого типа
-                        if(!startingInventory.ContainItems(subtypesAmounts[subtype], subtypesItems[subtype].Type))
-                        {
-                        /// Пока пропускаем перенос этого предмета, в будущем здесь будет запрос ресурсов, которых не хватает
-                        continue;
-                            ///
-                        }
-
-                        
-                        // Перекидываем предметы в запрошенном количестве в пункт назначения
-                        startingInventory.TransferItemTo(destinationInventory, subtypesItems[subtype], subtypesAmounts[subtype]);
+                        // Если подтип предмета равен подтипу из имеющихся, то добавляем их в словарь
+                        if (item.Type.SubtypeId == subtype) fillableDict.Add(subtype, item);
 
                     }
 
-
-                    return true;
                 }
+
+                return true;
             }
+        }
+
+        class AssemblerManager
+        {
+            // Сборщик
+            public IMyAssembler Assembler { get; set; }
+
+            // Конструктор по умолчанию
+            public AssemblerManager(IMyAssembler assembler) => Assembler = assembler;
+
+            public void assembleItem(MyInventoryItem item, int amount, StringBuilder DEBUGSTR)
+            {
+                DEBUGSTR.Append("MyObjectBuilder_" + item.Type.ToString() + '/' + item.Type.TypeId);
+
+                // Получаем MyDefinitionId из item
+                MyDefinitionId defID = MyDefinitionId.Parse("MyObjectBuilder_" + item.Type.ToString() + '/' + item.Type.TypeId);
+
+                // Получаем MyFixedPoint из amount
+                MyFixedPoint fpAmount = amount;
+
+                // Добавляем в очередь создание предмета item в количестве amount
+                this.Assembler.AddQueueItem(defID, fpAmount);               
+            }
+        }
+
+        // Класс перемещения предметов из одного инвентаря в другой инвентарь
+        class ItemTransferer
+        {
+
+            // Метод перемещения из одного инвентаря в другой с использованием 2-ух словарей: словарь типа "подтип-предмет" и словарь типа "подтип-количество"
+            public bool smartTransferToByDictionaries(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts, AssemblerManager asmManager, StringBuilder DEBUGSTR)
+            {
+
+                // Если инвентари некорректны или словари пусты
+                if (startingInventory == null || destinationInventory == null || subtypesAmounts.Count < 1 || subtypesItems.Count < 1)
+                {
+                    return false;
+                }
+
+
+                // Проходим по всему словарю
+                foreach (string subtype in subtypesItems.Keys)
+                {
+
+                    // Если компонент не запрошен, то пропускаем его 
+                    if (subtypesAmounts[subtype] < 0) continue;
+
+
+                    // Если в инвентаре недостаточно предметов необходимого типа
+                    if (!startingInventory.ContainItems(subtypesAmounts[subtype], subtypesItems[subtype].Type))
+                    {
+                        /// Пока пропускаем перенос этого предмета, в будущем здесь будет запрос ресурсов, которых не хватает
+                        //continue;
+                        // Собираем необходимые предметы
+                        asmManager.assembleItem(subtypesItems[subtype], subtypesAmounts[subtype], DEBUGSTR);
+                        ///
+                    }
+
+
+                    // Перекидываем предметы в запрошенном количестве в пункт назначения
+                    startingInventory.TransferItemTo(destinationInventory, subtypesItems[subtype], subtypesAmounts[subtype]);
+
+                }
+
+
+                return true;
+            }
+        }
 
 
 
@@ -289,7 +317,7 @@ namespace Template
 
         public void Main(string argument, UpdateType updateSource)
         {
-            
+
             // Берем отправной инвентарь
             IMyInventory startingInventory = GridTerminalSystem.GetBlockWithName(InputData.StartingContainerName).GetInventory();
             // Берем инвентарь назначения
@@ -312,7 +340,7 @@ namespace Template
             /// DEBUG START
             StringBuilder DEBUGSTR = new StringBuilder();
             /// DEBUG END
-            
+
             // Если парсер распарсил данные панели ввода в словарь
             if (parser.parseInputPanelText(inputPanel, subtypesAmounts, DEBUGSTR))
             {
@@ -323,7 +351,7 @@ namespace Template
 
                 foreach (string subtype in subtypesAmounts.Keys)
                 {
-                    Echo(subtype + " " + subtypesAmounts[subtype] +'\n');
+                    Echo(subtype + " " + subtypesAmounts[subtype] + '\n');
                 }
                 /// DEBUG END
 
@@ -350,7 +378,7 @@ namespace Template
                 ItemTransferer transferer = new ItemTransferer();
 
                 // Переносим запрошенные ресурсы по запрошенному адресу
-                if(transferer.transferToByDictionaries(startingInventory, destinationInventory, subtypesItems, subtypesAmounts))
+                if (transferer.transferToByDictionaries(startingInventory, destinationInventory, subtypesItems, subtypesAmounts))
                 {
                     Echo("Мы переместили предметы!");
                 }
@@ -358,7 +386,7 @@ namespace Template
                 {
                     Echo("Перемещение предметов не удалось!");
                 }
-                
+
                 // TODO: вызывать ItemTransferer
 
                 /// Устаревший код 
