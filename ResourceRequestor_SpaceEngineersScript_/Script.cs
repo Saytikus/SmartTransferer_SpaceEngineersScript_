@@ -22,6 +22,10 @@ using Sandbox.Game.Debugging;
 using VRage;
 using Sandbox.Definitions;
 using System.Diagnostics;
+using Sandbox.Game;
+using VRage.Game.Entity;
+using Sandbox.Game.Entities;
+using VRage.ObjectBuilders;
 //using Sandbox.ModAPI;
 //using VRage.Game.ModAPI;
 
@@ -54,6 +58,109 @@ namespace Template
             static public string AssemblerName { get; private set; } = "Private Assembler 1";
         }
 
+        class TransferItem
+        {
+            public string SubtypeId { get; private set; }
+
+            public int RequestedAmount { get; private set; }
+
+            public bool IsTransfered { get; set; }
+
+
+            public MyInventoryItem Item { get; private set; }
+
+            public bool HasItem { get; private set; } = false;
+
+            public bool IsClear { get; private set; } = true;
+
+            public bool IsRequested { get; set; } = false;
+
+            public TransferItem()
+            {
+                SubtypeId = "";
+                RequestedAmount = -1;
+                IsTransfered = false;
+
+                Item = new MyInventoryItem();
+                HasItem = false;
+                IsClear = true;
+
+                IsRequested = false;
+            }
+
+            public bool setData(string subtypeId, int amount, bool isTransfered, MyInventoryItem item, bool isRequested)
+            {
+
+                if (this.IsTransfered || item == new MyInventoryItem())
+                {
+                    return false;
+                }
+
+                SubtypeId = subtypeId;
+                RequestedAmount = amount;
+                IsTransfered = isTransfered;
+
+                Item = item;
+                HasItem = true;
+                IsClear = false;
+
+                IsRequested = isRequested;
+
+                return true;
+            }
+
+            public bool setData(string subtypeId, int amount, bool isTransfered, MyInventoryItem item)
+            {
+
+                if(this.IsTransfered || item == new MyInventoryItem())
+                {
+                    return false;
+                }
+
+                SubtypeId = subtypeId;
+                RequestedAmount = amount;
+                IsTransfered = isTransfered;
+
+                Item = item;
+                HasItem = true;
+                IsClear = false;
+
+                IsRequested = false;
+
+                return true;
+            }
+
+            public bool setData(string subtypeId, int amount, bool isTransfered)
+            {
+                SubtypeId = subtypeId;
+                RequestedAmount = amount;
+                IsTransfered = isTransfered;
+
+                Item = new MyInventoryItem();
+                HasItem = false;
+                IsClear = false;
+
+                IsRequested = false;
+
+                return true;
+            }
+
+            public void clear()
+            {
+                SubtypeId = "";
+                RequestedAmount = -1;
+                IsTransfered = false;
+
+                Item = new MyInventoryItem();
+                HasItem = false;
+                IsClear = true;
+
+                IsRequested = false;
+            }
+
+
+        }
+
         static class Worker
         {
 
@@ -63,15 +170,14 @@ namespace Template
             // Состояние работы
             public static WorkStates actualWorkState { get; set; } = Worker.WorkStates.WaitingStart;
 
-
+            public static void resetWorkState()
+            {
+                Worker.actualWorkState = Worker.WorkStates.WaitingStart;
+            }
 
             // Методы выполнения работы ( перемещение ресурсов по запросу ) 
-            public static void work(StringBuilder DEBUGSTR_1, StringBuilder DEBUGSTR_2, StringBuilder DEBUGSTR_3)
+            public static void work()
             {
-
-                DEBUGSTR_1.Clear();
-                DEBUGSTR_2.Clear();
-                DEBUGSTR_3.Clear();
 
                 // Устанавливаем флаг, что мы начали работу
                 Worker.actualWorkState = WorkStates.Processing;
@@ -81,30 +187,22 @@ namespace Template
                 // Берем инвентарь назначения
                 IMyInventory destinationInventory = Worker.GridTerminalSystem.GetBlockWithName(InputData.DestinationContainerName).GetInventory();
 
-                // Берем панель ввода
-                //IMyTextPanel inputPanel = Worker.GridTerminalSystem.GetBlockWithName(InputData.InputPanelName) as IMyTextPanel;
-                // Берем панель вывода
-                //IMyTextPanel outputPanel = Worker.GridTerminalSystem.GetBlockWithName(InputData.OutputPanelName) as IMyTextPanel;
-
                 // Инициализируем парсер
                 InputPanelTextParser parser = new InputPanelTextParser();
 
                 // Инициализируем словарь типа "подтип-количество"
-                Dictionary<string, int> subtypesAmounts = new Dictionary<string, int>();
+                List<TransferItem> transferItems = new List<TransferItem>();
 
                 // Если парсер распарсил данные панели ввода в словарь
-                if (parser.parseInputPanelText(PanelWriter.InputPanel, subtypesAmounts, DEBUGSTR_1))
+                if (parser.parseInputPanelText(PanelWriter.InputPanel, transferItems))
                 {
-
-                    // Инициализируем словарь типа подтип предмета - предмет
-                    Dictionary<string, MyInventoryItem> subtypesItems = new Dictionary<string, MyInventoryItem>();
 
                     // Инициализируем и заполняем список предметов инвентаря
                     List<MyInventoryItem> items = new List<MyInventoryItem>();
                     startingInventory.GetItems(items);
 
                     // Заполняем словарь
-                    ItemDictionaryFiller.fillSubtypeIdItemDictionary(subtypesItems, InputPanelTextHelper.ComponentSubtypes, items);
+                    TransferItemUtils.coordinateTransferItems(transferItems, items);
 
 
                     // Инициализируем переносчик
@@ -113,13 +211,9 @@ namespace Template
                     // Инициализируем менеджер сборщика
                     AssemblerManager asmManager = new AssemblerManager(Worker.GridTerminalSystem.GetBlockWithName(InputData.AssemblerName) as IMyAssembler);
 
-                    PanelWriter.writeOutputData("Мы инициализировали сборщик ( до трансфера )" + '\n', true);
-
                     // Переносим запрошенные ресурсы по запрошенному адресу
-                    if (smartTransferer.smartTransferTo(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager))
+                    if (smartTransferer.smartTransferTo(startingInventory, destinationInventory, transferItems, asmManager))
                     {
-
-                        PanelWriter.writeOutputData("Мы перенесли предметы" + '\n', true);
 
                         // Устанавливаем флаг о завершении работы
                         Worker.actualWorkState = Worker.WorkStates.Completed;
@@ -127,9 +221,6 @@ namespace Template
 
                     else
                     {
-
-                        PanelWriter.writeOutputData("Мы не перенесли предметы" + '\n', true);
-
                         // Если работа не приостановлена
                         if (Worker.actualWorkState != Worker.WorkStates.WaitingResources)
                         {
@@ -142,8 +233,16 @@ namespace Template
             }
 
             // Метод возобновления работы
-            public static void workResumption(StringBuilder DEBUGSTR_1, StringBuilder DEBUGSTR_2, StringBuilder DEBUGSTR_3)
+            public static void workResumption()
             {
+
+                // Очищаем список предметов на перенос от тех, которые уже перенесены
+                TransferItemUtils.removeTransferedItems(SmartItemTransfererSnapshot.Snapshot.TransferItems);
+
+                // Берем отправной инвентарь
+                IMyInventory startingInventory = Worker.GridTerminalSystem.GetBlockWithName(InputData.StartingContainerName).GetInventory();
+                // Берем инвентарь назначения
+                IMyInventory destinationInventory = Worker.GridTerminalSystem.GetBlockWithName(InputData.DestinationContainerName).GetInventory();
 
                 // Устанавливаем флаг, что работа снова в процесса
                 Worker.actualWorkState = Worker.WorkStates.Processing;
@@ -151,11 +250,19 @@ namespace Template
                 // Вынимаем из снимка умный переносчик предметов
                 SmartItemTransferer smartTransferer = SmartItemTransfererSnapshot.Transferer;
 
-                // Продолжаем умный перенос предметов
-                if(smartTransferer.smartTransferTo(SmartItemTransfererSnapshot.Snapshot.StartingInventory,
-                                                SmartItemTransfererSnapshot.Snapshot.DestinationInventory,
-                                                SmartItemTransfererSnapshot.Snapshot.SubtypesItems,
-                                                SmartItemTransfererSnapshot.Snapshot.SubtypesAmounts,
+
+                // Обновляем данные о предметах инвентаря
+                List<TransferItem> transferItems = SmartItemTransfererSnapshot.Snapshot.TransferItems;
+                List<MyInventoryItem> items = new List<MyInventoryItem>();
+                startingInventory.GetItems(items);
+
+                TransferItemUtils.coordinateTransferItems(transferItems, items);
+
+
+                // Продолжаем умный перенос предметов, с обновленными инвентарями
+                if (smartTransferer.smartTransferTo(startingInventory,
+                                                destinationInventory,
+                                                SmartItemTransfererSnapshot.Snapshot.TransferItems,
                                                 SmartItemTransfererSnapshot.Snapshot.AsmManager))
                 {
 
@@ -197,58 +304,6 @@ namespace Template
         }
 
 
-        // Глобальный класс снимка умного переносчика ресурсов
-        static class SmartItemTransfererSnapshot
-        {
-
-            // Переносчик предметов
-            public static SmartItemTransferer Transferer { get; private set; }
-
-            // Снимок метода smartTransferTo
-            public static SmartTransferToSnapshot Snapshot { get; private set; }
-
-            public static void saveSnapshot(SmartItemTransferer transferer, SmartTransferToSnapshot snapshot)
-            {
-                SmartItemTransfererSnapshot.Transferer = transferer;
-                SmartItemTransfererSnapshot.Snapshot = snapshot;
-            }
-
-            // Класс-снимок метода smartTransferTo класса ItemTransferer
-            public class SmartTransferToSnapshot
-            {
-
-                // Отправной инвентарь
-                public IMyInventory StartingInventory { get; private set; }
-
-                // Инвентарь назначения
-                public IMyInventory DestinationInventory { get; private set; }
-
-                // Словарь типа "подтип-предмет"
-                public Dictionary<string, MyInventoryItem> SubtypesItems { get; private set; }
-
-                // Словарь типа "подтип-количество"
-                public Dictionary<string, int> SubtypesAmounts { get; }
-
-                // Менеджер сборщика
-                public AssemblerManager AsmManager { get; }
-
-                // Конструктор по умолчанию
-                public SmartTransferToSnapshot(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts, AssemblerManager asmManager)
-                {
-                    this.StartingInventory = startingInventory;
-                    this.DestinationInventory = destinationInventory;
-                    this.SubtypesItems = subtypesItems;
-                    this.SubtypesAmounts = subtypesAmounts;
-                    this.AsmManager = asmManager;
-                }
-            }
-        }
-
-
-
-
-
-
         // Класс, содержащий utils данные и методы для панели ввода
         static class InputPanelTextHelper
         {
@@ -266,7 +321,7 @@ namespace Template
             public static string[] ComponentNamesRU { get; private set; } = new string[21]
             {
             "Бронированноестекло", "Компьютер", "Строительныекомпоненты", "Компонентыдетектора", "Экран", "Взрывчатка",
-            "Балка", "Компонентыгравитационногогенератора", "Внутренняя пластина", "Большаястальнаятруба", "Медицинскиекомпоненты", "Компонентрешётки", "Мотор",
+            "Балка", "Компонентыгравитационногогенератора", "Внутренняяпластина", "Большаястальнаятруба", "Медицинскиекомпоненты", "Компонентрешётки", "Мотор",
             "Энергоячейка", "Радиокомпоненты", "Компонентыреактора", "Малаятрубка", "Солнечнаяячейка", "Стальнаяпластина", "Сверхпроводник",
             "Деталиионногоускорителя"
             };
@@ -316,13 +371,13 @@ namespace Template
         class InputPanelTextParser
         {
             // Необходимый размер данных
-            public const int requiredDataStringsSize = 22;
+            public const int requiredDataStringsSize = 21;
 
-            // Метод формирующий словарь типа "подтип-количество" из данных панели ввода
-            public bool parseInputPanelText(IMyTextPanel inputPanel, Dictionary<string, int> fillableDict, StringBuilder DEBUGSTR)
+            // Метод список предметов на перенос
+            public bool parseInputPanelText(IMyTextPanel inputPanel, List<TransferItem> transferItems)
             {
                 // Очищаем заполняемый словарь
-                fillableDict.Clear();
+                transferItems.Clear();
 
                 // Инициализируем и заполняем динамическую строку текстом из панели ввода
                 StringBuilder tempBuilder = new StringBuilder();
@@ -331,6 +386,7 @@ namespace Template
                 // Проверка на пустоту и содержание символа перехода на следующую строку
                 if (tempBuilder.ToString() == "" || !tempBuilder.ToString().Contains('\n'))
                 {
+                    Worker.actualWorkState =  Worker.WorkStates.Aborted;
                     return false;
                 }
 
@@ -340,8 +396,12 @@ namespace Template
                 // Если первая строка в списке - не заглавие
                 if (!InputPanelTextHelper.isDefaultText(inputPanelDataStrings[0]))
                 {
+                    Worker.actualWorkState = Worker.WorkStates.Aborted;
                     return false;
                 }
+
+                // Удаляем последний лишний перенос строки
+                inputPanelDataStrings.Remove(inputPanelDataStrings[inputPanelDataStrings.Count - 1]);
 
                 // Удаляем заглавие
                 inputPanelDataStrings.Remove(inputPanelDataStrings.First());
@@ -349,6 +409,7 @@ namespace Template
                 // Если размер сформированного списка не равен заданному
                 if (inputPanelDataStrings.Count != requiredDataStringsSize)
                 {
+                    Worker.actualWorkState = Worker.WorkStates.Aborted;
                     return false;
                 }
 
@@ -356,17 +417,17 @@ namespace Template
                 foreach (string componentString in inputPanelDataStrings)
                 {
 
-                    // Костыль
-                    if (componentString == "")
-                    {
-                        break;
-                    }
-
                     // Если строка данных компонента не содержит пробел или символ '='
                     if (!componentString.Contains(' ') || !componentString.Contains('='))
                     {
                         // Очищаем словарь т.к. в него уже могли добавится данные, без очистки словаря при обрыве его заполнения в нём останется мусор
-                        fillableDict.Clear();
+                        transferItems.Clear();
+
+                        PanelWriter.writeOutputDataLine("Парсер: зашли в не соедржит ' ' или = ", true);
+                        PanelWriter.writeOutputDataLine(componentString, true);
+
+                        Worker.actualWorkState = Worker.WorkStates.Aborted;
+
                         return false;
                     }
 
@@ -383,74 +444,160 @@ namespace Template
                     foreach (char ch in componentNameAmount[1])
                     {
                         // Если в строке, где должно быть количество запрошенных ресурсов, присутствует не цифра
-                        if(!Char.IsDigit(ch))
+                        if (!Char.IsDigit(ch))
                         {
 
                             // Откидываем лог для оператора
-                            //InputPanelWriter.write("");
+                            PanelWriter.writeOutputDataLine("Ошибка! В количество компонента передано не число", true);
 
                             // Переводим флаг в прерывание
                             Worker.actualWorkState = Worker.WorkStates.Aborted;
-                            
+
                             return false;
                         }
                     }
 
-
+                    int amount = Int16.Parse(componentNameAmount[1]);
 
                     // Добавляем в словарь подтип компонента и количество
-                    if (InputPanelTextHelper.ComponentNamesRUSubtypesENG.Keys.Contains(componentNameAmount[0]))
+                    if (InputPanelTextHelper.ComponentNamesRUSubtypesENG.Keys.Contains(componentNameAmount[0]) && amount > 0)
                     {
-                        DEBUGSTR.Append("ComponentNamesRUSubtypesENG содержит подтип " + componentNameAmount[0]);
-                        fillableDict.Add(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], Int32.Parse(componentNameAmount[1]));
+                        TransferItem transferItem = new TransferItem();
+                       
+                        transferItem.setData(InputPanelTextHelper.ComponentNamesRUSubtypesENG[componentNameAmount[0]], amount, false);
+
+                        PanelWriter.writeOutputDataLine("Мы добавили предмет " + transferItem.SubtypeId + " в transferItems ", true);
+
+                        transferItems.Add(transferItem);
+
+                        PanelWriter.writeOutputDataLine("Вывод traferItems", true);
+                        foreach (TransferItem item in transferItems)
+                        {
+                            PanelWriter.writeOutputDataLine(item.SubtypeId, true);
+                        }
+
+                        PanelWriter.writeOutputDataLine("Предмет содержится в списке?" + transferItems.Contains(transferItem).ToString(), true);
                     }
-                    DEBUGSTR.Append("ComponentNamesRUSubtypesENG не содержит подтип " + componentNameAmount[0]);
+
                 }
 
-                return true;
-            }
-        }
-
-
-        static class ItemDictionaryFiller
-        {
-            // Метод заполнения словаря типа "подтип - предмет" предметами, имеющимися в инвентаре
-            public static bool fillSubtypeIdItemDictionary(Dictionary<string, MyInventoryItem> fillableDict, string[] subtypeIds, List<MyInventoryItem> items)
-            {
-
-                // Если подтипы пусты или инвентарь пуст
-                if (subtypeIds.Length < 1 || items.Count < 1)
+                if(transferItems.Count < 1)
                 {
+                    PanelWriter.writeOutputDataLine("Перенос прерван, ни один предмет не был запрошен", true);
+                    Worker.actualWorkState = Worker.WorkStates.Aborted;
                     return false;
                 }
 
+                return true;
+            }
+        }
 
-                // Очищаем словарь для заполнения
-                fillableDict.Clear();
 
-                // Проходим по всем предметам
-                foreach (MyInventoryItem item in items)
+        static class TransferItemUtils
+        {
+
+
+            // Метод для совмещения предметов на перенос и предметов, находящихся в данный момент в инвентаре
+            public static bool coordinateTransferItems(List<TransferItem> transferItems, List<MyInventoryItem> items)
+            {
+
+                // Если предметы на перенос пусты
+                if (transferItems.Count < 1)
+                {
+                    PanelWriter.writeOutputDataLine("coordinateTransferItems: мы зашли в неудачную проверку на кол-во содержимого", true);
+                    return false;
+                }
+                
+                // Проходим по всем предметам для переноса
+                foreach (TransferItem transferItem in transferItems)
                 {
 
-                    // Проходим по всем подтипам предметов
-                    foreach (string subtype in InputPanelTextHelper.ComponentNamesRUSubtypesENG.Values)
+                    // Если предмет для переноса уже перенесен или очищен или заполнен
+                    if (transferItem.IsTransfered || transferItem.IsClear)
+                    {
+                        PanelWriter.writeOutputDataLine("coordinateTransferItems: мы зашли в неудачную проверку флагов", true);
+                        return false;
+                    }
+
+
+
+                    // Проходим по всем предметам из инвентаря
+                    foreach (MyInventoryItem item in items)
                     {
 
-                        // Если подтип предмета равен подтипу из имеющихся, то добавляем их в словарь
-                        if (item.Type.SubtypeId == subtype) fillableDict.Add(subtype, item);
+                        // Если подтип у предмета для переноса и у предмета из инвентаря совпадает
+                        if (item.Type.SubtypeId == transferItem.SubtypeId)
+                        {
+
+                            PanelWriter.writeOutputDataLine("coordinateTransferItems: мы меняем данные объекту " + transferItem.SubtypeId, true);
+
+                            // Включаем в предмет для переноса предмет из инвентаря
+                            if(transferItem.setData(transferItem.SubtypeId, transferItem.RequestedAmount, transferItem.IsTransfered, item, transferItem.IsRequested))
+                            {
+                                PanelWriter.writeOutputDataLine("coordinateTransferItems: мы поменяли данные  объекту " + transferItem.SubtypeId, true);
+                                PanelWriter.writeOutputDataLine("coordinateTransferItems: ЕГО КАЛВО" + transferItem.Item.Amount, true);
+                            }
+                            else
+                            {
+                                PanelWriter.writeOutputDataLine("coordinateTransferItems: мы НЕ поменяли данные  объекту " + transferItem.SubtypeId, true);
+                            }
+                           
+                            
+                        }
 
                     }
+
+
 
                 }
 
                 return true;
             }
+        
+            public static bool removeTransferedItems(List<TransferItem> transferItems)
+            {
+                PanelWriter.writeOutputDataLine("removeTransferedItems: вывод transferitems:", true);
+                foreach (var item in transferItems)
+                {
+                    PanelWriter.writeOutputDataLine(item.SubtypeId, true);
+                }
+
+                // Идем по порядку с конца списка и удаляем необходимые предметы
+                for (int i = transferItems.Count - 1; i >= 0; i--)
+                {
+
+                    if (transferItems[i].IsTransfered)
+                    {
+                        PanelWriter.writeOutputDataLine("removeTransferedItems: удаляем предмет: " + transferItems[i].SubtypeId, true);
+                        transferItems.Remove(transferItems[i]);
+                    }
+
+                }
+
+                return true;
+
+            }
         }
+
+        
 
         class AssemblerManager
         {
             // Сборщик
             public IMyAssembler Assembler { get; set; }
+
+            public string BlueprintType { get; private set; } = "MyObjectBuilder_BlueprintDefinition/";
+
+            public Dictionary<string, string> ComponentAndBlueprintSubtypes { get; private set; } = new Dictionary<string, string>()
+            {
+            { "BulletproofGlass", "BulletproofGlass" }, { "Computer",  "ComputerComponent" }, { "Construction", "ConstructionComponent" },
+            { "Detector", "DetectorComponent" }, { "Display", "Display" }, { "Explosives", "ExplosivesComponent" },
+            { "Girder", "GirderComponent" }, { "GravityGenerator", "GravityGeneratorComponent" }, { "InteriorPlate", "InteriorPlate" },
+            { "LargeTube", "LargeTube" }, { "Medical", "MedicalComponent" }, { "MetalGrid", "MetalGrid" },
+            { "Motor", "MotorComponent" }, { "PowerCell", "PowerCell" }, { "RadioCommunication", "RadioCommunicationComponent" },
+            { "Reactor", "ReactorComponent" }, { "SmallTube", "SmallTube" }, { "SolarCell", "SolarCell" },
+            { "SteelPlate", "SteelPlate" }, { "Superconductor", "Superconductor" }, { "Thrust", "ThrustComponent" }
+            };
 
             // Конструктор по умолчанию
             public AssemblerManager(IMyAssembler assembler)
@@ -458,18 +605,78 @@ namespace Template
                 Assembler = assembler;
             }
 
-            public void assembleItem(MyInventoryItem item, int amount)
+            public bool assembleComponent(string subtypeId, int amount)
             {
-                PanelWriter.writeOutputData("MyObjectBuilder_" + item.Type.ToString() + '/' + item.Type.TypeId + '\n', true);
+
+                if(!ComponentAndBlueprintSubtypes.Keys.Contains(subtypeId))
+                {
+                    PanelWriter.writeOutputDataLine("Компонент с подтипом: " + subtypeId, true);
+                    PanelWriter.writeOutputDataLine("не содержится в словаре ComponentAndBlueprintSubtypes.", true);
+
+                    return false;
+                }
 
                 // Получаем MyDefinitionId из item
-                MyDefinitionId defID = MyDefinitionId.Parse("MyObjectBuilder_" + item.Type.ToString() + '/' + item.Type.TypeId);
+                MyDefinitionId defID = MyDefinitionId.Parse(this.BlueprintType + this.ComponentAndBlueprintSubtypes[subtypeId]);
 
                 // Получаем MyFixedPoint из amount
                 MyFixedPoint fpAmount = amount;
 
+                PanelWriter.writeOutputDataLine("defID: " + defID , true);
+
+                PanelWriter.writeOutputDataLine((this.Assembler.CanUseBlueprint(defID)).ToString(), true);
+
                 // Добавляем в очередь создание предмета item в количестве amount
                 this.Assembler.AddQueueItem(defID, fpAmount);
+
+                PanelWriter.writeOutputDataLine("ПОСЛЕ адд ту квае", true);
+
+
+                return true;
+            }
+
+        }
+
+        // Глобальный класс снимка умного переносчика ресурсов
+        static class SmartItemTransfererSnapshot
+        {
+
+            // Переносчик предметов
+            public static SmartItemTransferer Transferer { get; private set; }
+
+            // Снимок метода smartTransferTo
+            public static SmartTransferToSnapshot Snapshot { get; private set; }
+
+            public static void saveSnapshot(SmartItemTransferer transferer, SmartTransferToSnapshot snapshot)
+            {
+                SmartItemTransfererSnapshot.Transferer = transferer;
+                SmartItemTransfererSnapshot.Snapshot = snapshot;
+            }
+
+            // Класс-снимок метода smartTransferTo класса ItemTransferer
+            public class SmartTransferToSnapshot
+            {
+
+                // Отправной инвентарь
+                public IMyInventory StartingInventory { get; private set; }
+
+                // Инвентарь назначения
+                public IMyInventory DestinationInventory { get; private set; }
+
+                // Список предметов на перенос
+                public List<TransferItem> TransferItems { get; private set; }
+
+                // Менеджер сборщика
+                public AssemblerManager AsmManager { get; private set; }
+
+                // Конструктор по умолчанию
+                public SmartTransferToSnapshot(IMyInventory startingInventory, IMyInventory destinationInventory, List<TransferItem> transferItems, AssemblerManager asmManager)
+                {
+                    this.StartingInventory = startingInventory;
+                    this.DestinationInventory = destinationInventory;
+                    this.TransferItems = transferItems;
+                    this.AsmManager = asmManager;
+                }
             }
         }
 
@@ -478,75 +685,64 @@ namespace Template
         {
 
             // Метод перемещения из одного инвентаря в другой с использованием 2-ух словарей: словарь типа "подтип-предмет" и словарь типа "подтип-количество"
-            public bool smartTransferTo(IMyInventory startingInventory, IMyInventory destinationInventory, Dictionary<string, MyInventoryItem> subtypesItems, Dictionary<string, int> subtypesAmounts, AssemblerManager asmManager)
+            public bool smartTransferTo(IMyInventory startingInventory, IMyInventory destinationInventory, List<TransferItem> transferItems, AssemblerManager asmManager)
             {
 
-                // Если инвентари некорректны или словари пусты
-                if (startingInventory == null || destinationInventory == null || subtypesAmounts.Count < 1 || subtypesItems.Count < 1)
+                // Если аргументы некорректны
+                if (startingInventory == null || destinationInventory == null || transferItems.Count < 1 || asmManager == null)
                 {
+                    Worker.actualWorkState = Worker.WorkStates.Aborted;
                     return false;
                 }
 
-                /// DEBUG START
-                PanelWriter.writeOutputData("Начало работы переноса предметов." + '\n', true);
-                /// DEBUG END
-
-                PanelWriter.writeOutputData("Вывод содержимого subtypesItems:" + '\n', true);
-                foreach (string subtype in subtypesItems.Keys)
-                {
-                    PanelWriter.writeOutputData("Подтип " + subtype + '\n', true);
-                    PanelWriter.writeOutputData("Предмет " + subtypesItems[subtype].Type + '\n', true);
-                }
-
-                PanelWriter.writeOutputData("Вывод содержимого subtypesAmounts:" + '\n', true);
-                foreach (string subtype in subtypesAmounts.Keys)
-                {
-                    PanelWriter.writeOutputData("Подтип " + subtype  + '\n', true);
-                    PanelWriter.writeOutputData("Колво " + subtypesAmounts[subtype].ToString() +'\n', true);
-                }
-
                 // Проходим по всему словарю
-                foreach (string subtype in subtypesItems.Keys)
+                foreach (TransferItem transferItem in transferItems)
                 {
 
-                    PanelWriter.writeOutputData("Мы в SmartTransferTo в фориче string subtype " + '\n', true);
-                    PanelWriter.writeOutputData("in subtypesItems.Keys: " + subtype + '\n', true);
-
-                    // Если компонент не запрошен 
-                    if (subtypesAmounts[subtype] <= 0)
+                    // Если данные предмета для переноса некорректны
+                    if (transferItem.IsTransfered || transferItem.IsClear)
                     {
-
-                        PanelWriter.writeOutputData("Мы в SmartTransferTo в фориче. Компонент " + subtype + " не запрашивали" +'\n', true);
-
-                        // Удаляем данные о нем из словаря subtypesItems
-                        subtypesItems.Remove(subtype);
-
-                        // Пропускаем его
-                        continue;
+                        PanelWriter.writeOutputDataLine("Некорректные данные предмета для переноса", true);
+                        Worker.actualWorkState = Worker.WorkStates.Aborted;
+                        return false;
                     }
 
+                    /// DEBUG START
+                    PanelWriter.writeOutputDataLine("В наличии предметов: " + transferItem.Item.Amount, true);
+                    PanelWriter.writeOutputDataLine("Запрошенно предметов: " + transferItem.RequestedAmount, true);
+                    /// DEBUG END
+
+                    PanelWriter.writeOutputDataLine("smartTransferTo: transferItem.Item.Type:" + transferItem.Item.Type, true);
 
                     // Если в инвентаре недостаточно предметов необходимого типа
-                    if (!startingInventory.ContainItems(subtypesAmounts[subtype], subtypesItems[subtype].Type))
+                    if (transferItem.Item.Amount < transferItem.RequestedAmount)
                     {
-
-                        /// DEBUG START
-                        PanelWriter.writeOutputData("Мы в SmartTransferTo в фориче. Компонента " + subtype + " не хватает " + '\n', true);
-                        PanelWriter.writeOutputData("Компонента " + subtype + " не хватает." + '\n', true);
-                        PanelWriter.writeOutputData("Запрошенное кол-во компонента: " + subtypesAmounts[subtype].ToString() + '\n', true);
-                        PanelWriter.writeOutputData("Имеющееся кол-во компонента в хранилище: " + startingInventory.GetItemAmount(subtypesItems[subtype].Type).ToIntSafe().ToString() + '\n', true);
-                        PanelWriter.writeOutputData("Приостанавливаем работу до создания компонента." + '\n', true);
-                        /// DEBUG END
 
                         // Если глобальный флаг работы - приостановлена, то сразу же возвращаемся назад, ибо мы
                         // ничего не должны сделать, ни новый запрос ресурсов, ни изменение снимка
-                        if (Worker.actualWorkState == Worker.WorkStates.WaitingResources) return false;
+                        if (Worker.actualWorkState != Worker.WorkStates.WaitingResources && Worker.actualWorkState != Worker.WorkStates.Processing)
+                        {
+                            PanelWriter.writeOutputDataLine("smartTransferTo: некорректное состояние работы", true);
+                            Worker.actualWorkState = Worker.WorkStates.Aborted;
+                            return false;
+                        }
 
-                        // Собираем необходимые предметы
-                        asmManager.assembleItem(subtypesItems[subtype], subtypesAmounts[subtype]);
+                        if (!transferItem.IsRequested)
+                        {
+                            // Ставим флаг, что предмет заказан
+                            transferItem.IsRequested = true;
+
+                            // Отправляем сборщику запрос на необходимые предметы
+                            if (!asmManager.assembleComponent(transferItem.SubtypeId, transferItem.RequestedAmount))
+                            {
+                                Worker.actualWorkState = Worker.WorkStates.Aborted;
+                                return false;
+                            }
+
+                        }
 
                         // Сохраняем глобальный снимок себя
-                        SmartItemTransfererSnapshot.saveSnapshot(this, new SmartItemTransfererSnapshot.SmartTransferToSnapshot(startingInventory, destinationInventory, subtypesItems, subtypesAmounts, asmManager));
+                        SmartItemTransfererSnapshot.saveSnapshot(this, new SmartItemTransfererSnapshot.SmartTransferToSnapshot(startingInventory, destinationInventory, transferItems, asmManager));
 
                         // Устанавливаем приостановленный статус работе
                         Worker.actualWorkState = Worker.WorkStates.WaitingResources;
@@ -559,25 +755,29 @@ namespace Template
 
 
                     // Перекидываем предметы в запрошенном количестве в пункт назначения
-                    if (startingInventory.TransferItemTo(destinationInventory, subtypesItems[subtype], subtypesAmounts[subtype]))
+                    if (startingInventory.TransferItemTo(destinationInventory, transferItem.Item, transferItem.RequestedAmount))
                     {
 
-                        /// DEBUG START
-                        PanelWriter.writeOutputData("Компонент " + subtype + " перенесен по назначению" + '\n', true);
-                        /// DEBUG END
+                        // Ставим флаг предмету, что он перенесен
+                        transferItem.IsTransfered = true;
+                        
+                        PanelWriter.writeOutputDataLine("Предмет " + transferItem.SubtypeId + " перенесен по назначению", true);
+                        
 
-                        // Удаляем данные о предмете из словаря subtypesItems
-                        subtypesItems.Remove(subtype);
                     }
-                    
+
                     else
                     {
-                        PanelWriter.writeOutputData("Компонент " + subtype + " не перенесен по назначению, TransferItemTo вернуло false" + '\n', true);
+                        
+                        PanelWriter.writeOutputDataLine("Предмет " + transferItem.SubtypeId + " не перенесен по назначению, TransferItemTo вернуло false", true);
+                        
+                        
+                        return false;
                     }
                 }
 
                 /// DEBUG START
-                PanelWriter.writeOutputData("Окончание работы переноса предметов." + '\n', true);
+                PanelWriter.writeOutputDataLine("Окончание работы переноса предметов.", true);
                 /// DEBUG END
 
                 return true;
@@ -611,6 +811,16 @@ namespace Template
             public static void writeOutputData(StringBuilder text, bool append)
             {
                 OutputPanel.WriteText(text, append);
+            }
+
+            public static void writeOutputDataLine(string text, bool append)
+            {
+                OutputPanel.WriteText(text + '\n', append);
+            }
+
+            public static void writeOutputDataLine(StringBuilder text, bool append)
+            {
+                OutputPanel.WriteText(text.Append('\n'), append);
             }
 
         }
@@ -655,20 +865,12 @@ namespace Template
                 case Worker.WorkStates.WaitingStart:
 
                     // Если передали аргумент "start", то начинаем работу
-                    if(argument == "start")
+                    if (argument == "start")
                     {
 
-                        PanelWriter.writeOutputData("Мы начали работу" + '\n', true);
+                        PanelWriter.writeOutputDataLine("Мы начали работу", false);
 
-                        Worker.work(DEBUGSTR_1, DEBUGSTR_2, DEBUGSTR_3);
-
-                        PanelWriter.writeOutputData(DEBUGSTR_1, true);
-                        PanelWriter.writeOutputData(DEBUGSTR_2, true);
-                        PanelWriter.writeOutputData(DEBUGSTR_3, true);
-
-                        DEBUGSTR_1.Clear();
-                        DEBUGSTR_2.Clear();
-                        DEBUGSTR_3.Clear();
+                        Worker.work();
                     }
 
                     break;
@@ -676,7 +878,7 @@ namespace Template
                 case Worker.WorkStates.Processing:
 
 
-                    PanelWriter.writeOutputData("Мы в работе" + '\n', true);
+                    PanelWriter.writeOutputDataLine("Мы в работе", true);
 
                     // Ничего не делаем
 
@@ -684,25 +886,17 @@ namespace Template
 
                 case Worker.WorkStates.WaitingResources:
 
-                    PanelWriter.writeOutputData("Мы ожидаем ресурсы" + '\n', true);
+                    PanelWriter.writeOutputDataLine("Мы ожидаем ресурсы", true);
 
                     // Пытаемся восстановить работу
-                    Worker.workResumption(DEBUGSTR_1, DEBUGSTR_2, DEBUGSTR_3);
-
-                    PanelWriter.writeOutputData(DEBUGSTR_1, true);
-                    PanelWriter.writeOutputData(DEBUGSTR_2, true);
-                    PanelWriter.writeOutputData(DEBUGSTR_3, true);
-
-                    DEBUGSTR_1.Clear();
-                    DEBUGSTR_2.Clear();
-                    DEBUGSTR_3.Clear();
+                    Worker.workResumption();
 
                     break;
 
                 case Worker.WorkStates.Completed:
 
                     // Тута выводим лог о завершении работы
-                    PanelWriter.writeOutputData("Перенос предметов завершен!" + '\n', true);
+                    PanelWriter.writeOutputDataLine("Перенос предметов завершен!", true);
 
 
                     // Устанавливаем стандартные значения после таймаута
@@ -715,12 +909,14 @@ namespace Template
                     InputPanelTextHelper.setDefaultSurfaceView(inputPanel);
                     InputPanelTextHelper.writeDefaultText(inputPanel);
 
+                    Worker.resetWorkState();
+
                     break;
 
                 case Worker.WorkStates.Aborted:
 
                     // Тута выводим лог о завершении работы
-                    PanelWriter.writeOutputData("Перенос прерван!" + '\n', true);
+                    PanelWriter.writeOutputDataLine("Перенос прерван!", true);
 
 
                     // Устанавливаем стандартные значения после таймаута
@@ -732,6 +928,8 @@ namespace Template
                     InputPanelTextHelper.setDefaultSurfaceView(outputP);
                     InputPanelTextHelper.setDefaultSurfaceView(inputP);
                     InputPanelTextHelper.writeDefaultText(inputP);
+
+                    Worker.resetWorkState();
 
                     break;
 
